@@ -1,13 +1,21 @@
 import numpy as np
-from gym_ligo.envs.LightsaberEnv import LightsaberEnv
+import gymnasium as gym
+import gym_ligo  # Registers 'Ligo-v0'
 
 def main():
-    config_path = "configuration/config.yaml"
-    env = LightsaberEnv(config_path, render_mode="human")
+    # --- 2. CREATE ENVIRONMENT VIA GYM ---
+    # This tests that your package is installed and registered correctly.
+    env = gym.make("Ligo-v0", render_mode="human")
+
+    # --- 3. UNWRAP FOR INTERNAL ACCESS ---
+    # gym.make() wraps the env in a TimeLimit wrapper.
+    # To access internal variables like _last_outputs or _system,
+    # we need a reference to the raw base environment.
+    raw_env = env.unwrapped
 
     obs, info = env.reset()
     print("Environment reset.")
-    print("Observation shape:", obs.shape)  # Changed from keys() to shape
+    print("Observation shape:", obs.shape)
 
     pitch_log = []
     beam_spot_log = []
@@ -16,13 +24,13 @@ def main():
     reward_log = []
 
     step = 0
-
     RENDER_EVERY_N_STEPS = 20
 
     while True:
-        # Action must be an array of shape (2,), not a scalar 0
+        # Action must be an array of shape (2,)
         action = np.zeros(2, dtype=np.float32)
 
+        # Step the wrapper (keeps track of time limits)
         obs, reward, terminated, truncated, info = env.step(action)
 
         # Only render occasionally
@@ -30,28 +38,29 @@ def main():
             env.render()
 
         # --- EXTRACT DATA FOR LOGGING ---
-        # The 'obs' variable is now just the history for the Neural Net.
-        # To log physics, we peek into the environment's internal state.
+        # We access 'raw_env' to peek at internal physics state.
 
-        # 1. Pitch is reliable
-        pitch_log.append(env._last_outputs["pitch"].copy())
+        # 1. Pitch
+        pitch_log.append(raw_env._last_outputs["pitch"].copy())
 
-        # 2. ACTUATION FIX: Read from the cached RL action, not the output dict
-        # env._current_rl_action is the exact numpy array we injected
-        actuation_log.append(env._current_rl_action.copy())
+        # 2. Actuation
+        # raw_env._current_rl_action is the exact numpy array we injected
+        actuation_log.append(raw_env._current_rl_action.copy())
 
-        # 3. Power from info
+        # 3. Power (available in info, but also in internal state)
         power_log.append(info["cavity_power"])
         reward_log.append(reward)
 
-        # 3. Beam Spot requires looking at the Beam component directly
-        # We find the beam component in the system (usually index 2, or searchable)
-        # We'll search for it dynamically to be safe:
-        if not hasattr(env, '_beam_component'):
+        # 4. Beam Spot requires looking at the Beam component directly
+        # We'll search for it dynamically on the raw_env
+        if not hasattr(raw_env, '_beam_component'):
             # Cache it so we don't search every step
-            env._beam_component = next(c for c in env._system.components if c.__class__.__name__ == 'Beam')
+            raw_env._beam_component = next(
+                c for c in raw_env._system.components
+                if c.__class__.__name__ == 'Beam'
+            )
 
-        beam_spot_log.append(env._beam_component.BS.copy())
+        beam_spot_log.append(raw_env._beam_component.BS.copy())
 
         step += 1
 
@@ -65,6 +74,8 @@ def main():
         if truncated:
             print("Episode finished (max_steps reached).")
             break
+
+    env.close()
 
     # Convert to numpy arrays
     pitch_log = np.array(pitch_log)
