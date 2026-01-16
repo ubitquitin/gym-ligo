@@ -17,4 +17,6 @@ You must have `git` installed to pull the physics engine submodule.
 ```bash
 git clone [https://github.com/yourusername/gym-ligo.git](https://github.com/yourusername/gym-ligo.git)
 cd gym-ligo
+# Create a virtual env however you please...
+pip install -e .
 ```
