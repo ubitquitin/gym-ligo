@@ -1,0 +1,118 @@
+# Configuration file for the O3 LIGO Hanford Lightsaber model [J Harms; Nov 18, 2022]
+
+SIM:
+      type: Simulation
+      loop: closed
+      simulation_sampling_frequency: 256  # Sampling frequency of the simulation [Hz]; good value 2048Hz
+      duration_batch: 1024  # Duration of time-series of input noises [s]
+      duration_fft: 64  # Duration of FFT segment for plots [s]
+      seed_for_random: None
+
+INPUT:
+      type: Laser
+      power: 705  # average power of arm-cavity input beam
+      wave_length: 1064e-9 # laser wavelength [m]
+      RIN: noise_inputs/LASER_RIN_LIGO_O3.csv  # relative intensity noise of arm-cavity input beam
+      out_ports: 1
+
+ITM:
+      type: Mirror
+      T: 0.014  # Power transmissivity
+      RoC: 1934.  # Radius of curvature [m]
+      # The following zpk models are taken from https://alog.ligo-la.caltech.edu/aLOG/index.php?callRep=41815
+      # response to torque coming from actuator [[z],[p],[k]]
+      act_to_angle: [[-2.107342e-01 + 2.871199e+00j, -2.107342e-01 - 2.871199e+00j],
+                     [-1.543716e-01 + 2.727201e+00j, -1.543716e-01 - 2.727201e+00j, -8.732026e-02 + 3.492316e+00j,
+                      -8.732026e-02 - 3.492316e+00j, -3.149511e-01 + 9.411627e+00j, -3.149511e-01 - 9.411627e+00j],
+                     [9.352955e+01]]
+      # response to radiation torque [[z],[p],[k]]
+      rad_to_angle: [[-1.772565e-01 + 2.866176e+00j, -1.772565e-01 - 2.866176e+00j, -1.755293e-01 + 7.064508e+00j,
+                      -1.755293e-01 - 7.064508e+00j],
+                     [-1.393094e-01 + 2.737083e+00j, -1.393094e-01 - 2.737083e+00j, -8.749749e-02 + 3.493148e+00j,
+                       -8.749749e-02 - 3.493148e+00j, -3.185553e-01 + 9.347665e+00j, -3.185553e-01 - 9.347665e+00j],
+                     [2.567652]]
+      # ITM pitch noise coming from upper sus stages (seismic + damping)
+      sus_noise: [[noise_inputs/ITM_SEI_LIGO_O3.csv, transfer_functions/tf_topL_2_tstP.csv],
+                  [noise_inputs/DAMP_L_LIGO_O3.csv, transfer_functions/tf_topNL_2_tstP.csv],
+                  [noise_inputs/DAMP_P_LIGO_O3.csv, transfer_functions/tf_topNP_2_tstP.csv]]
+      in_ports: 1, 2
+      out_ports: 3, 4
+
+ARM_BEAM_X:
+      type: Beam
+      length: 3994.5  # cavity length [m]
+      BS_offset: [0, 0] #[3e-3, -2.6e-3]    # intentional beam-spot offsets (control point) [m]
+      in_ports: 4, 7
+      out_ports: 2, 5
+
+ETM:
+      type: Mirror
+      T: 1e-6  # Power transmissivity
+      RoC: 2245.  # Radius of curvature [m]
+      # The following zpk models are taken from https://alog.ligo-la.caltech.edu/aLOG/index.php?callRep=41815
+      # response to torque coming from actuator [[z],[p],[k]]
+      act_to_angle: [[-2.107342e-01 + 2.871199e+00j, -2.107342e-01 - 2.871199e+00j],
+                     [-1.543716e-01 + 2.727201e+00j, -1.543716e-01 - 2.727201e+00j, -8.732026e-02 + 3.492316e+00j,
+                      -8.732026e-02 - 3.492316e+00j, -3.149511e-01 + 9.411627e+00j, -3.149511e-01 - 9.411627e+00j],
+                     [9.352955e+01]]
+      # response to radiation torque [[z],[p],[k]]
+      rad_to_angle: [[-1.772565e-01 + 2.866176e+00j, -1.772565e-01 - 2.866176e+00j, -1.755293e-01 + 7.064508e+00j,
+                      -1.755293e-01 - 7.064508e+00j],
+                     [-1.393094e-01 + 2.737083e+00j, -1.393094e-01 - 2.737083e+00j, -8.749749e-02 + 3.493148e+00j,
+                       -8.749749e-02 - 3.493148e+00j, -3.185553e-01 + 9.347665e+00j, -3.185553e-01 - 9.347665e+00j],
+                     [2.567652]]
+      # ETM pitch noise coming from upper sus stages (seismic + damping)
+      sus_noise: [[noise_inputs/ETM_SEI_LIGO_O3.csv, transfer_functions/tf_topL_2_tstP.csv],
+                  [noise_inputs/DAMP_L_LIGO_O3.csv, transfer_functions/tf_topNL_2_tstP.csv],
+                  [noise_inputs/DAMP_P_LIGO_O3.csv, transfer_functions/tf_topNP_2_tstP.csv]]
+      in_ports: 5, 6
+      out_ports: 7, power_monitor
+
+PITCH_SENSOR:
+      type: Sensor
+      input: ITM.P, ETM.P
+      matrix: ARM_BEAM_X.local_to_eigen  # transformation from input channels to observed quantity
+      readout_noise: noise_inputs/SENSOR_PITCH_SOFT.csv, noise_inputs/SENSOR_PITCH_HARD.csv
+
+PITCH_CONTROL:
+      type: Controller
+      input: PITCH_SENSOR
+      # control filters (soft/hard) [[[zs],[ps],[ks]], [[zh],[ph],[kh]]]
+      filter: [[[-0.88 + 8.75j, -0.88 - 8.75j, -1.885, 0.+235.38j, 0.+115.39j, 0.-235.38j, 0.-115.39j,
+                 0.+93.33j, 0.-93.33j, -4.45 + 8.31j, -4.45 - 8.31j, -1.07 + 2.75j, -1.07 - 2.75j],
+                [-46 + 100j, -46 - 100j, -39.2 + 111j, -39.2 - 111j, -33.57-47.32j, -7.294-87.86j, -33.57+47.32j, -7.294+87.86j,
+                 -21.09-51.43j, -21.09+51.43j, -7.06 + 6.245j, -7.06 - 6.245j, -0.27 + 2.94j, -0.27 - 2.94j],
+                [4.3590e+04]],
+               [[-0.3436+4.11j, -0.3436-4.11j, -0.7854+9.392j, -0.7854-9.392j, -2. * np.pi * 0.1,
+                 0.+624.39j, 0.-624.39j, 0.+193.58j, 0.+129.06j, 0.-193.58j, 0.-129.06j,
+                 -0.322 + 0.299j, -0.322 - 0.299j, -0.786 + 0.981j, -0.786 - 0.981j, -1.068 + 2.753j,
+                 -1.068 - 2.753j, -1.53 + 4.13j, -1.53 - 4.13j],
+                [-78.77+171.25j, -78.77-171.25j, -0.062832, -628.32, 0.,
+                 -34.29-56.55j, -34.29+56.55j, -46.61-108.32j, -2.171-126.18j, -46.61+108.32j, -2.171+126.18j,
+                 -0.161 + 0.409j, -0.161 - 0.409j, -0.313 + 1.217j, -0.313 - 1.217j, -0.268 + 2.941j,
+                 -0.268 - 2.941j, -0.24 + 4.39j, -0.24 - 4.39j],
+                [1.5427e+04]]]
+      # actuation matrix; note that the actuation signal is given a minus sign before applying it
+      matrix: ARM_BEAM_X.eigen_to_local
+      output: ITM.SUS_P, ETM.SUS_P
+
+RAD_PRESS_COMP:
+      type: Controller
+      input: PITCH_SENSOR
+      # control filters (soft/hard); note that it is calculated as an effective torque directly on the test mass
+      filter: [[[0.+1061.47914473j, 0.-1061.47914473j],
+                [-58.29428329-96.14564236j, -58.29428329+96.14564236j],
+                [0.0112201]],
+               [[0.+1061.47914473j, 0.-1061.47914473j],
+                [-58.29428329-96.14564236j, -58.29428329+96.14564236j],
+                [0.0112201]]]
+      # actuation matrix; note that the actuation signal is given a minus sign before applying it
+      matrix: ARM_BEAM_X.eigen_to_local @ [[2/299792458. * ARM_BEAM_X.dydth_soft * ARM_BEAM_X.P_av, 0.],
+               [0., 2/299792458. * ARM_BEAM_X.dydth_hard * (ARM_BEAM_X.P_av - 56700)]]
+      output: ITM.P, ETM.P
+
+OUTPUT:
+      type: Output
+      output_channels: PITCH_SENSOR, PITCH_CONTROL, ARM_BEAM_X.P, ITM.P, ETM.P
+      output_sampling_frequency: 256  # Sampling frequency of saved time series [Hz]
+      out_directory: data_output
