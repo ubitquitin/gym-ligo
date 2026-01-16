@@ -1,5 +1,5 @@
 import numpy as np
-from gym_ligo.LightsaberEnv import LightsaberEnv
+from gym_ligo.envs.LightsaberEnv import LightsaberEnv
 
 def main():
     config_path = "configuration/config.yaml"

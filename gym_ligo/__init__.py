@@ -14,11 +14,11 @@ submodule_path = os.path.normpath(submodule_path)
 # --- 2. ADD TO PYTHON PATH ---
 if submodule_path not in sys.path:
     print(f"gym-ligo: Adding {submodule_path} to sys.path")
-    sys.path.append(submodule_path)
+    sys.path.insert(0, submodule_path)
 
 # --- 3. REGISTER ENV ---
 register(
     id="Ligo-v0",
-    entry_point="gym_ligo.envs:LightsaberEnv",
+    entry_point="gym_ligo.envs.LightsaberEnv:LightsaberEnv",
     max_episode_steps=262143, # Remember the off-by-one fix!
 )

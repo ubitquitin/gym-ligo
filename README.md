@@ -1,5 +1,7 @@
 # gym-ligo: RL Environment for Gravitational Wave Detectors
 
+![LIGO RL Environment](image.png)
+
 `gym-ligo` is a custom [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) environment that wraps the **Lightsaber** time-domain simulation for LIGO interferometers. It allows researchers to train Reinforcement Learning (RL) agents to stabilize the high-power laser cavities of gravitational wave detectors.
 
 ## Features

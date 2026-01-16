@@ -1,3 +1,9 @@
+import matplotlib
+try:
+    matplotlib.use('QtAgg')
+except ImportError:
+    print("Warning: QtAgg backend not found. Falling back to default.")
+
 import gymnasium as gym
 import gym_ligo  # Registers 'Ligo-v0'
 

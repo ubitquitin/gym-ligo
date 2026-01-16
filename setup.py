@@ -18,6 +18,11 @@ setup(
         "pyyaml",
         "scipy",
         "matplotlib",
+        "absl-py",
+        "fancyflags",
+        "pandas",
+        "tqdm",
+        "PyQt6"
     ],
 
     # Include non-python files (like your config.yaml)

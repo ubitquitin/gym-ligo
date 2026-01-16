@@ -2,31 +2,39 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import yaml
+import os
 from collections import deque
 try:
-    from simulate import create_system, link_components # Works because of the path hack
+    # 1. Import the module (for path finding)
+    import simulate
+    # 2. Import the functions (for usage)
+    from simulate import create_system, link_components
 except ImportError as e:
     raise ImportError(
         "Could not import 'simulate'. "
         "Did you initialize submodules? Run: git submodule update --init --recursive"
     ) from e
-
 # --- CONFIGURATION ---
 HISTORY_LEN = 64  # How many past steps the agent sees
 ACT_SCALE = 1e-5  # Scaling factor: Agent [-1, 1] -> Physics [Newtons/Torque]
 TARGET_BAND = (10.0, 30.0) # Critical frequency band to suppress (Hz)
 metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
+
 class LightsaberEnv(gym.Env):
     """
     Gymnasium wrapper for LIGO Lightsaber simulation.
     """
 
-    metadata = {"render_modes": []}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
-    def __init__(self, config_path, render_mode=None):
+    def __init__(self, config_path=None, render_mode=None):
         super().__init__()
-        self.config_path = config_path
+        if config_path is None:
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            self.config_path = os.path.join(current_dir, "config.yaml")
+        else:
+            self.config_path = config_path
 
         # --- Define Action Space ---
         # 2 Continuous actions: [ITM_Control, ETM_Control]
@@ -115,6 +123,26 @@ class LightsaberEnv(gym.Env):
     def _build_lightsaber_system(self):
         with open(self.config_path) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
+
+        # Re-referencing transfer and noise input locations in config
+        lightsaber_base_dir = os.path.dirname(os.path.abspath(simulate.__file__))
+        config = self._fix_config_paths(config, lightsaber_base_dir)
+
+        # Get output directory from config
+        output_section = next(v for k, v in config.items() if v.get("type") == "Output")
+        plot_dir = output_section["out_directory"]
+
+        # Create plot dir if it doesnt exist
+        if not os.path.exists(plot_dir):
+            try:
+                os.makedirs(plot_dir)
+                print(f"LightsaberEnv: Created missing output directory: {plot_dir}")
+            except OSError as e:
+                # Fallback to /tmp if we can't write to the requested dir
+                print(f"LightsaberEnv: Warning - Could not create {plot_dir}. Using /tmp")
+                plot_dir = "/tmp"
+                output_section["out_directory"] = "/tmp"
+
 
         # Separate sections
         simulation = next(v for k, v in config.items() if v.get("type") == "Simulation")
@@ -245,6 +273,30 @@ class LightsaberEnv(gym.Env):
         if np.max(np.abs(readout)) > 1.0:
             return True
         return False
+
+    # Helper method to move noise input filepaths in Lightsaber config to the nested true location
+    def _fix_config_paths(self, config_data, base_dir):
+        """
+        Recursively traverses the config dictionary and updates relative paths
+        (noise_inputs, transfer_functions) to be absolute paths pointing to the submodule.
+        """
+        if isinstance(config_data, dict):
+            for k, v in config_data.items():
+                config_data[k] = self._fix_config_paths(v, base_dir)
+        elif isinstance(config_data, list):
+            for i in range(len(config_data)):
+                config_data[i] = self._fix_config_paths(config_data[i], base_dir)
+        elif isinstance(config_data, str):
+            # Check if this string looks like a path to the missing files
+            if "noise_inputs" in config_data or "transfer_functions" in config_data:
+                # Handle comma-separated paths (e.g. in readout_noise)
+                if "," in config_data:
+                    paths = [p.strip() for p in config_data.split(",")]
+                    fixed_paths = [os.path.join(base_dir, p) for p in paths]
+                    return ", ".join(fixed_paths)
+                else:
+                    return os.path.join(base_dir, config_data)
+        return config_data
 
 
     def render(self):
